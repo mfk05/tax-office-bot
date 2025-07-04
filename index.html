@@ -199,7 +199,13 @@
         .bot-message .message-content h3 {
             color: #1a365d;
             margin-bottom: 12px;
+            margin-top: 16px;
             font-size: 18px;
+            font-weight: 600;
+        }
+
+        .bot-message .message-content h3:first-child {
+            margin-top: 0;
         }
 
         .bot-message .message-content ul {
@@ -208,18 +214,40 @@
             margin: 12px 0;
         }
 
+        .bot-message .message-content ol {
+            padding-left: 20px;
+            margin: 12px 0;
+        }
+
         .bot-message .message-content li {
             padding: 8px 0;
             padding-left: 24px;
             position: relative;
+            line-height: 1.6;
         }
 
-        .bot-message .message-content li:before {
-            content: "✓";
+        .bot-message .message-content ul li:before {
+            content: "•";
             position: absolute;
             left: 0;
             color: #1a365d;
             font-weight: bold;
+            font-size: 20px;
+            line-height: 1;
+            top: 8px;
+        }
+
+        .bot-message .message-content p {
+            margin: 8px 0;
+            line-height: 1.8;
+        }
+
+        .bot-message .message-content code {
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
         }
 
         .highlight {
@@ -231,12 +259,14 @@
 
         .code-block {
             background: #f3f4f6;
-            padding: 12px;
+            padding: 16px;
             border-radius: 8px;
             margin: 12px 0;
             font-family: monospace;
             font-size: 14px;
             overflow-x: auto;
+            white-space: pre-wrap;
+            line-height: 1.5;
         }
 
         .input-container {
@@ -779,6 +809,75 @@
             indicator.style.display = 'none';
         }
 
+        function convertMarkdownToHTML(text) {
+            // 基本的なマークダウンをHTMLに変換
+            let html = text;
+            
+            // 見出し（先に処理）
+            html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+            html = html.replace(/^## (.+)$/gm, '<h3>$1</h3>');
+            html = html.replace(/^# (.+)$/gm, '<h3>$1</h3>');
+            
+            // 太字と強調
+            html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+            
+            // インラインコード（バッククォート）
+            html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+            
+            // リスト項目を一時的にマーク
+            html = html.replace(/^- (.+)$/gm, '|||UL|||$1|||ENDUL|||');
+            html = html.replace(/^\* (.+)$/gm, '|||UL|||$1|||ENDUL|||');
+            html = html.replace(/^\d+\. (.+)$/gm, '|||OL|||$1|||ENDOL|||');
+            
+            // 改行処理（リストマーカーを避ける）
+            html = html.split('\n').map(line => {
+                if (line.includes('|||UL|||') || line.includes('|||OL|||') || 
+                    line.includes('<h3>') || line.includes('</h3>')) {
+                    return line;
+                }
+                return line + '<br>';
+            }).join('\n');
+            
+            // 連続するリスト項目をグループ化
+            html = html.replace(/((?:|||UL|||.*?|||ENDUL|||(?:\n|<br>))+)/g, function(match) {
+                const items = match.replace(/|||UL|||/g, '<li>')
+                                  .replace(/|||ENDUL|||/g, '</li>')
+                                  .replace(/<br>/g, '');
+                return '<ul>' + items + '</ul>';
+            });
+            
+            html = html.replace(/((?:|||OL|||.*?|||ENDOL|||(?:\n|<br>))+)/g, function(match) {
+                const items = match.replace(/|||OL|||/g, '<li>')
+                                  .replace(/|||ENDOL|||/g, '</li>')
+                                  .replace(/<br>/g, '');
+                return '<ol>' + items + '</ol>';
+            });
+            
+            // 段落の処理
+            html = html.replace(/\n\n/g, '</p><p>');
+            if (!html.startsWith('<h3>') && !html.startsWith('<ul>') && !html.startsWith('<ol>')) {
+                html = '<p>' + html;
+            }
+            if (!html.endsWith('</h3>') && !html.endsWith('</ul>') && !html.endswith('</ol>')) {
+                html = html + '</p>';
+            }
+            
+            // 不要な空のタグを削除
+            html = html.replace(/<p><\/p>/g, '');
+            html = html.replace(/<p><h3>/g, '<h3>');
+            html = html.replace(/<\/h3><\/p>/g, '</h3>');
+            html = html.replace(/<p><ul>/g, '<ul>');
+            html = html.replace(/<\/ul><\/p>/g, '</ul>');
+            html = html.replace(/<p><ol>/g, '<ol>');
+            html = html.replace(/<\/ol><\/p>/g, '</ol>');
+            html = html.replace(/<br><ul>/g, '<ul>');
+            html = html.replace(/<br><ol>/g, '<ol>');
+            html = html.replace(/<br><h3>/g, '<h3>');
+            
+            return html;
+        }
+
         async function sendMessage() {
             const input = document.getElementById('messageInput');
             const message = input.value.trim();
@@ -812,7 +911,9 @@
                         try {
                             const aiResponse = await callClaudeAPI(message);
                             hideTypingIndicator();
-                            addMessage(aiResponse, false, true);
+                            // マークダウンをHTMLに変換して表示
+                            const formattedResponse = convertMarkdownToHTML(aiResponse);
+                            addMessage(formattedResponse, false, false);
                         } catch (apiError) {
                             hideTypingIndicator();
                             addMessage(`<div class="error-message">AIによる回答の取得に失敗しました。</div>${offlineResponse}`, false);
