@@ -857,63 +857,115 @@
         }
 
         function convertMarkdownToHTML(text) {
+            // HTMLタグをエスケープして安全に処理
             let html = text;
             
-            // 見出し
+            // 既存のHTMLタグをエスケープ（<>を文字実体参照に変換）
+            html = html.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            
+            // 見出し（###, ##, #）
             html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
             html = html.replace(/^## (.+)$/gm, '<h3>$1</h3>');
             html = html.replace(/^# (.+)$/gm, '<h3>$1</h3>');
             
-            // 太字と強調
+            // 太字（**text**）
             html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            
+            // 斜体（*text*）- 太字の後に処理
             html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
             
-            // インラインコード
+            // インラインコード（`code`）
             html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
             
-            // リスト項目を一時的にマーク
-            html = html.replace(/^- (.+)$/gm, '|||UL|||$1|||ENDUL|||');
-            html = html.replace(/^\* (.+)$/gm, '|||UL|||$1|||ENDUL|||');
-            html = html.replace(/^\d+\. (.+)$/gm, '|||OL|||$1|||ENDOL|||');
+            // 箇条書きリスト（- item または * item）
+            const lines = html.split('\n');
+            let inList = false;
+            let listType = '';
+            let processedLines = [];
             
-            // 改行処理
-            html = html.split('\n').map(line => {
-                if (line.includes('|||UL|||') || line.includes('|||OL|||') || 
-                    line.includes('<h3>') || line.includes('</h3>')) {
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const trimmedLine = line.trim();
+                
+                // 箇条書きリストの判定
+                if (trimmedLine.match(/^[-*] (.+)$/)) {
+                    const itemContent = trimmedLine.replace(/^[-*] (.+)$/, '$1');
+                    if (!inList) {
+                        processedLines.push('<ul>');
+                        inList = true;
+                        listType = 'ul';
+                    }
+                    processedLines.push(`<li>${itemContent}</li>`);
+                }
+                // 番号付きリストの判定
+                else if (trimmedLine.match(/^\d+\. (.+)$/)) {
+                    const itemContent = trimmedLine.replace(/^\d+\. (.+)$/, '$1');
+                    if (!inList || listType !== 'ol') {
+                        if (inList) {
+                            processedLines.push(`</${listType}>`);
+                        }
+                        processedLines.push('<ol>');
+                        inList = true;
+                        listType = 'ol';
+                    }
+                    processedLines.push(`<li>${itemContent}</li>`);
+                }
+                // リスト以外の行
+                else {
+                    if (inList) {
+                        processedLines.push(`</${listType}>`);
+                        inList = false;
+                        listType = '';
+                    }
+                    
+                    // 空行の処理
+                    if (trimmedLine === '') {
+                        processedLines.push('<br>');
+                    } else {
+                        processedLines.push(line);
+                    }
+                }
+            }
+            
+            // 最後にリストが開いている場合は閉じる
+            if (inList) {
+                processedLines.push(`</${listType}>`);
+            }
+            
+            html = processedLines.join('\n');
+            
+            // 段落の処理（見出しやリスト以外のテキスト）
+            html = html.split('\n').map((line, index, array) => {
+                const trimmed = line.trim();
+                
+                // 既にHTMLタグで囲まれている、または空行の場合はそのまま
+                if (trimmed.startsWith('<') || trimmed === '<br>' || trimmed === '') {
                     return line;
                 }
-                return line + '<br>';
+                
+                // 前後の行を確認
+                const prevLine = index > 0 ? array[index - 1].trim() : '';
+                const nextLine = index < array.length - 1 ? array[index + 1].trim() : '';
+                
+                // リストやブロック要素の直後でなければ段落として扱う
+                if (!prevLine.endsWith('>') && !nextLine.startsWith('<')) {
+                    return `<p>${line}</p>`;
+                }
+                
+                return line;
             }).join('\n');
             
-            // リストをグループ化
-            html = html.replace(/((?:|||UL|||.*?|||ENDUL|||(?:\n|<br>))+)/g, function(match) {
-                const items = match.replace(/|||UL|||/g, '<li>')
-                                  .replace(/|||ENDUL|||/g, '</li>')
-                                  .replace(/<br>/g, '');
-                return '<ul>' + items + '</ul>';
-            });
+            // 連続する<br>を削減
+            html = html.replace(/(<br>\n){2,}/g, '<br>\n');
             
-            html = html.replace(/((?:|||OL|||.*?|||ENDOL|||(?:\n|<br>))+)/g, function(match) {
-                const items = match.replace(/|||OL|||/g, '<li>')
-                                  .replace(/|||ENDOL|||/g, '</li>')
-                                  .replace(/<br>/g, '');
-                return '<ol>' + items + '</ol>';
-            });
-            
-            // 段落の処理
-            html = html.replace(/\n\n/g, '</p><p>');
-            if (!html.startsWith('<h3>') && !html.startsWith('<ul>') && !html.startsWith('<ol>')) {
-                html = '<p>' + html;
-            }
-            if (!html.endsWith('</h3>') && !html.endsWith('</ul>') && !html.endsWith('</ol>')) {
-                html = html + '</p>';
-            }
-            
-            // 不要な空のタグを削除
-            html = html.replace(/<p><\/p>/g, '');
-            html = html.replace(/<p>(<h3>|<ul>|<ol>)/g, '$1');
-            html = html.replace(/(<\/h3>|<\/ul>|<\/ol>)<\/p>/g, '$1');
-            html = html.replace(/<br>(<ul>|<ol>|<h3>)/g, '$1');
+            // 不要な改行を削除
+            html = html.replace(/<\/li>\n<li>/g, '</li><li>');
+            html = html.replace(/<\/h3>\n<br>/g, '</h3>');
+            html = html.replace(/<\/ul>\n<br>/g, '</ul>');
+            html = html.replace(/<\/ol>\n<br>/g, '</ol>');
+            html = html.replace(/<br>\n<h3>/g, '<h3>');
+            html = html.replace(/<br>\n<ul>/g, '<ul>');
+            html = html.replace(/<br>\n<ol>/g, '<ol>');
             
             return html;
         }
@@ -998,6 +1050,25 @@
             } catch (error) {
                 console.error('API Test Error:', error);
             }
+        }
+        
+        // マークダウン変換のテスト
+        function testMarkdownConversion() {
+            const testCases = [
+                '# 見出し1\n## 見出し2\n### 見出し3',
+                '**太字**と*斜体*のテスト',
+                '- リスト項目1\n- リスト項目2\n- リスト項目3',
+                '1. 番号付き1\n2. 番号付き2',
+                'これは`インラインコード`です',
+                '<li>これはHTMLタグです</li>'
+            ];
+            
+            testCases.forEach((test, index) => {
+                console.log(`Test ${index + 1}:`);
+                console.log('Input:', test);
+                console.log('Output:', convertMarkdownToHTML(test));
+                console.log('---');
+            });
         }
     </script>
 </body>
