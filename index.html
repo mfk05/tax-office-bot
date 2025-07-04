@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>税理士会支部 Google Workspace AIサポート</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1a365d 0%, #2c5282 100%);
+            color: white;
+            padding: 32px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%);
+            animation: shimmer 20s linear infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 12px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+            position: relative;
+            z-index: 1;
+        }
+
+        .status-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4ade80;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .status-dot.offline {
+            background: #f87171;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .mode-selector {
+            padding: 20px;
+            background: #f8fafc;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .mode-button {
+            padding: 10px 20px;
+            border: 2px solid #e5e7eb;
+            background: white;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .mode-button.active {
+            background: #1a365d;
+            color: white;
+            border-color: #1a365d;
+        }
+
+        .chat-container {
+            height: 500px;
+            overflow-y: auto;
+            padding: 24px;
+            background: #fafbfc;
+            scroll-behavior: smooth;
+        }
+
+        .message {
+            margin-bottom: 24px;
+            animation: fadeIn 0.4s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .user-message {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .bot-message {
+            display: flex;
+            justify-content: flex-start;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .bot-avatar {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, #1a365d 0%, #2c5282 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 16px 20px;
+            border-radius: 20px;
+            word-wrap: break-word;
+            line-height: 1.6;
+        }
+
+        .user-message .message-content {
+            background: linear-gradient(135deg, #1a365d 0%, #2c5282 100%);
+            color: white;
+            border-bottom-right-radius: 6px;
+        }
+
+        .bot-message .message-content {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-bottom-left-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        }
+
+        .bot-message .message-content h3 {
+            color: #1a365d;
+            margin-bottom: 12px;
+            font-size: 18px;
+        }
+
+        .bot-message .message-content ul {
+            list-style: none;
+            padding-left: 0;
+            margin: 12px 0;
+        }
+
+        .bot-message .message-content li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+
+        .bot-message .message-content li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #1a365d;
+            font-weight: bold;
+        }
+
+        .highlight {
+            background: #fef3c7;
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .code-block {
+            background: #f3f4f6;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 12px 0;
+            font-family: monospace;
+            font-size: 14px;
+            overflow-x: auto;
+        }
+
+        .input-container {
+            padding: 24px;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 16px 20px;
+            border: 2px solid #e5e7eb;
+            border-radius: 28px;
+            font-size: 16px;
+            transition: all 0.3s;
+            background: #f9fafb;
+        }
+
+        .message-input:focus {
+            outline: none;
+            border-color: #1a365d;
+            background: white;
+        }
+
+        .send-button {
+            padding: 16px 32px;
+            background: linear-gradient(135deg, #1a365d 0%, #2c5282 100%);
+            color: white;
+            border: none;
+            border-radius: 28px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .send-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(26, 54, 93, 0.3);
+        }
+
+        .send-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .quick-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .quick-button {
+            padding: 8px 16px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 20px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .quick-button:hover {
+            background: #1a365d;
+            color: white;
+            border-color: #1a365d;
+            transform: translateY(-1px);
+        }
+
+        .typing-indicator {
+            display: none;
+            padding: 16px 20px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 20px;
+            border-bottom-left-radius: 6px;
+            width: 90px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            margin-left: 48px;
+        }
+
+        .typing-indicator span {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #6b7280;
+            margin: 0 3px;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-indicator span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-indicator span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% {
+                transform: translateY(0);
+                opacity: 0.7;
+            }
+            30% {
+                transform: translateY(-15px);
+                opacity: 1;
+            }
+        }
+
+        .config-panel {
+            background: #f3f4f6;
+            padding: 20px;
+            border-top: 1px solid #e5e7eb;
+            display: none;
+        }
+
+        .config-panel.active {
+            display: block;
+        }
+
+        .config-item {
+            margin-bottom: 16px;
+        }
+
+        .config-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: #374151;
+        }
+
+        .config-input {
+            width: 100%;
+            padding: 10px 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .config-button {
+            background: #1a365d;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 12px;
+        }
+
+        .error-message {
+            background: #fee;
+            color: #dc2626;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 12px 0;
+            font-size: 14px;
+        }
+
+        .info-message {
+            background: #e0f2fe;
+            color: #075985;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 12px 0;
+            font-size: 14px;
+        }
+
+        @media (max-width: 640px) {
+            .container {
+                max-width: 100%;
+                border-radius: 0;
+            }
+            
+            .header {
+                padding: 24px;
+            }
+            
+            .header h1 {
+                font-size: 24px;
+            }
+            
+            .status-indicator {
+                position: static;
+                margin-top: 16px;
+                background: rgba(255, 255, 255, 0.15);
+            }
+            
+            .message-content {
+                max-width: 85%;
+            }
+            
+            .quick-buttons {
+                gap: 6px;
+            }
+            
+            .quick-button {
+                font-size: 12px;
+                padding: 6px 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 税理士会支部 AIサポート</h1>
+            <p>Google Workspace導入に関するご質問にお答えします</p>
+            <div class="status-indicator">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">スタンドアロンモード</span>
+            </div>
+        </div>
+
+        <div class="mode-selector">
+            <button class="mode-button active" onclick="setMode('standalone')">📚 オフライン版</button>
+            <button class="mode-button" onclick="setMode('api')">🌐 Claude API版</button>
+            <button class="mode-button" onclick="toggleConfig()">⚙️ 設定</button>
+        </div>
+
+        <div class="config-panel" id="configPanel">
+            <div class="config-item">
+                <label class="config-label">API エンドポイント URL</label>
+                <input type="text" id="apiEndpoint" class="config-input" 
+                       placeholder="https://script.google.com/macros/s/.../exec"
+                       value="">
+            </div>
+            <div class="info-message">
+                ⚠️ Google Apps Script (GAS) のURLを入力してください。
+                <br><br>
+                GASでClaude APIキーを安全に管理し、無料でプロキシサーバーとして利用できます。
+                設定方法は付属のガイドをご参照ください。
+            </div>
+            <button class="config-button" onclick="saveConfig()">設定を保存</button>
+        </div>
+
+        <div class="chat-container" id="chatContainer">
+            <div class="message bot-message">
+                <div class="bot-avatar">AI</div>
+                <div class="message-content">
+                    <h3>こんにちは！税理士会支部のAIサポートです</h3>
+                    Google Workspace導入に関するご質問をお気軽にどうぞ。<br><br>
+                    よくあるご質問：
+                    <ul>
+                        <li>利用開始時期について</li>
+                        <li>費用・契約について</li>
+                        <li>幹事交代時の手続き</li>
+                        <li>アクセス権限の仕組み</li>
+                        <li>データの復元方法</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="typing-indicator" id="typingIndicator">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+
+        <div class="input-container">
+            <div class="input-wrapper">
+                <input type="text" id="messageInput" class="message-input" 
+                       placeholder="質問を入力してください..." 
+                       onkeypress="handleKeyPress(event)">
+                <button class="send-button" id="sendButton" onclick="sendMessage()">
+                    送信
+                </button>
+            </div>
+            <div class="quick-buttons">
+                <button class="quick-button" onclick="sendQuickMessage('いつから使えますか？')">利用開始時期</button>
+                <button class="quick-button" onclick="sendQuickMessage('費用はいくらですか？')">費用について</button>
+                <button class="quick-button" onclick="sendQuickMessage('幹事交代時の手続きは？')">幹事交代</button>
+                <button class="quick-button" onclick="sendQuickMessage('アクセス権限について教えて')">権限設定</button>
+                <button class="quick-button" onclick="sendQuickMessage('データを削除してしまった')">データ復元</button>
+                <button class="quick-button" onclick="sendQuickMessage('スマホでも使える？')">モバイル利用</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentMode = 'standalone';
+        // デフォルトのGAS URLを設定可能（独自ドメインのリダイレクトURLも可）
+        const DEFAULT_API_ENDPOINT = ''; // 例: 'https://your-domain.com/api' または GAS URL
+        let apiEndpoint = localStorage.getItem('apiEndpoint') || DEFAULT_API_ENDPOINT;
+        
+        // システムプロンプト（Claude API使用時）
+        const systemPrompt = `あなたは税理士会支部のGoogle Workspace導入をサポートするAIアシスタントです。
+
+以下の情報に基づいて、幹事の方々の質問に親切丁寧に回答してください：
+
+【重要情報】
+- 導入時期：2025年秋以降（事務局での初期設定完了後）
+- 年間費用：38,400円（税抜）- 事務局IDと支部長IDの2ライセンスのみ
+- 各幹事は個人のGoogleアカウントで招待される形（追加費用なし）
+
+【権限設定】
+- 部長：全部署のフォルダを閲覧可能、自部署は編集も可能
+- 副部長：自部署のフォルダのみ編集可能  
+- 副支部長：事務局管理フォルダにアクセス可能
+
+【幹事交代時】
+- 退任者の作業は不要（事務局が一括でアクセス権を解除）
+- 新任者は招待メールから参加
+
+【データ削除時の対応】
+- ゴミ箱から30日以内なら自分で復元可能
+- ゴミ箱からも削除した場合、25日以内なら事務局で復元可能
+
+【その他】
+- スマートフォン・タブレットでも利用可能（Googleドライブアプリ使用）
+- 招待メールアドレスはGoogleアカウントがあれば何でもOK
+
+質問に対しては、上記の情報を基に具体的で分かりやすい回答を心がけてください。
+不明な点は事務局への問い合わせを案内してください。`;
+
+        // ローカル知識ベース（オフライン版用）
+        const knowledgeBase = {
+            startDate: {
+                keywords: ['いつから', '利用開始', '開始時期', 'いつ使える'],
+                response: `<h3>利用開始時期について</h3>
+                2025年秋以降、事務局での初期設定（グループ作成やフォルダ設定など）が完了次第、利用開始のご案内をいたします。<br><br>
+                正式な開始時期については、改めてご連絡いたします。`
+            },
+            email: {
+                keywords: ['メールアドレス', 'gmail', '招待', 'アカウント'],
+                response: `<h3>招待されるメールアドレスについて</h3>
+                Googleアカウントに登録されているメールアドレスであれば、どのようなものでも構いません：
+                <ul>
+                <li>xxxx@gmail.com のようなGmailアドレス</li>
+                <li>プロバイダや勤務先のメールアドレスで、Googleアカウントを作成したもの</li>
+                </ul>
+                招待をご希望のメールアドレスを事務局までお知らせください。`
+            },
+            transition: {
+                keywords: ['幹事交代', '退任', '引き継ぎ', '交代時'],
+                response: `<h3>幹事交代時の手続きについて</h3>
+                <span class="highlight">退任される方の作業は特に必要ありません。</span><br><br>
+                事務局が、皆様のアクセス権を一括で解除します。<br><br>
+                ただし、ご自身の担当業務に関するファイルが、すべて漏れなく共有ドライブに保存されているかどうかのご確認をお願いいたします。`
+            },
+            deletion: {
+                keywords: ['削除', 'ゴミ箱', '復元', '消してしまった', 'データ復元'],
+                response: `<h3>データを削除してしまった場合</h3>
+                ご安心ください。復元できる可能性が高いです：
+                <ul>
+                <li>まず、ご自身の「ゴミ箱」を確認してください</li>
+                <li>削除から30日以内であれば、ご自身でファイルを元の場所に戻せます</li>
+                <li>ゴミ箱からも削除してしまった場合でも、事務局にご連絡いただければ、<span class="highlight">削除後25日以内であればファイルを復元できます</span></li>
+                </ul>
+                これは有料プランの強みです。`
+            },
+            cost: {
+                keywords: ['費用', '料金', 'いくら', 'コスト', '予算'],
+                response: `<h3>費用について</h3>
+                年間費用：<span class="highlight">38,400円（税抜）</span><br><br>
+                内訳：
+                <ul>
+                <li>1,600円/月 × 2ID × 12ヶ月</li>
+                <li>契約ID：事務局ID と 支部長ID の2つのみ</li>
+                </ul>
+                各幹事（約30名）は個人のGoogleアカウントで招待される形なので、追加費用はかかりません。`
+            },
+            mobile: {
+                keywords: ['スマホ', 'スマートフォン', 'タブレット', 'アプリ', 'モバイル'],
+                response: `<h3>スマートフォン・タブレットでの利用</h3>
+                はい、利用可能です：
+                <ul>
+                <li>お使いのスマートフォンやタブレットに「Googleドライブ」のアプリをインストール</li>
+                <li>招待されたGoogleアカウントでログイン</li>
+                <li>PCと同じようにファイルにアクセスできます</li>
+                </ul>`
+            },
+            permission: {
+                keywords: ['権限', 'アクセス権', '見えない', 'フォルダ', '閲覧'],
+                response: `<h3>アクセス権限の仕組み</h3>
+                役職に応じた権限設定：
+                <ul>
+                <li><strong>部長</strong>：全部署のフォルダを閲覧可能、自部署は編集も可能</li>
+                <li><strong>副部長</strong>：自部署のフォルダのみ編集可能</li>
+                <li><strong>副支部長</strong>：事務局管理フォルダにアクセス可能</li>
+                </ul>
+                フォルダが見えない場合は、事務局までご連絡ください。`
+            }
+        };
+
+        // 初期設定
+        if (apiEndpoint) {
+            document.getElementById('apiEndpoint').value = apiEndpoint;
+        }
+
+        function setMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.mode-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            
+            if (mode === 'api' && apiEndpoint) {
+                statusDot.classList.remove('offline');
+                statusText.textContent = 'Claude API接続中';
+            } else {
+                statusDot.classList.add('offline');
+                statusText.textContent = 'スタンドアロンモード';
+            }
+        }
+
+        function toggleConfig() {
+            const panel = document.getElementById('configPanel');
+            panel.classList.toggle('active');
+        }
+
+        function saveConfig() {
+            apiEndpoint = document.getElementById('apiEndpoint').value;
+            localStorage.setItem('apiEndpoint', apiEndpoint);
+            
+            if (currentMode === 'api' && apiEndpoint) {
+                document.getElementById('statusDot').classList.remove('offline');
+                document.getElementById('statusText').textContent = 'Claude API接続中';
+            }
+            
+            toggleConfig();
+            addMessage('設定を保存しました。', false);
+        }
+
+        function findBestResponse(userMessage) {
+            const lowerMessage = userMessage.toLowerCase();
+            let bestMatch = null;
+            let maxScore = 0;
+
+            for (const [key, data] of Object.entries(knowledgeBase)) {
+                let score = 0;
+                for (const keyword of data.keywords) {
+                    if (lowerMessage.includes(keyword)) {
+                        score += keyword.length;
+                    }
+                }
+                if (score > maxScore) {
+                    maxScore = score;
+                    bestMatch = data.response;
+                }
+            }
+
+            if (bestMatch) {
+                return bestMatch;
+            }
+
+            return `<h3>お問い合わせありがとうございます</h3>
+            申し訳ございません。その質問については詳しい情報が見つかりませんでした。<br><br>
+            事務局までお問い合わせいただくか、以下のような質問をお試しください：
+            <ul>
+            <li>利用開始時期について</li>
+            <li>費用について</li>
+            <li>幹事交代時の手続き</li>
+            <li>アクセス権限について</li>
+            </ul>`;
+        }
+
+        async function callClaudeAPI(message) {
+            if (!apiEndpoint) {
+                throw new Error('APIエンドポイントが設定されていません');
+            }
+
+            // Google Apps Script用のリクエスト形式
+            const response = await fetch(apiEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'text/plain', // GASはtext/plainが必要
+                },
+                body: JSON.stringify({
+                    messages: [
+                        {
+                            role: 'user',
+                            content: message
+                        }
+                    ]
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('API呼び出しに失敗しました');
+            }
+
+            const data = await response.json();
+            return data.response || data.content || 'エラー: 応答を取得できませんでした';
+        }
+
+        function addMessage(content, isUser, isRaw = false) {
+            const chatContainer = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
+            
+            if (!isUser) {
+                const avatarDiv = document.createElement('div');
+                avatarDiv.className = 'bot-avatar';
+                avatarDiv.textContent = 'AI';
+                messageDiv.appendChild(avatarDiv);
+            }
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            
+            if (isRaw) {
+                contentDiv.textContent = content;
+            } else {
+                contentDiv.innerHTML = content;
+            }
+            
+            messageDiv.appendChild(contentDiv);
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function showTypingIndicator() {
+            const chatContainer = document.getElementById('chatContainer');
+            const indicator = document.getElementById('typingIndicator');
+            indicator.style.display = 'block';
+            chatContainer.appendChild(indicator);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function hideTypingIndicator() {
+            const indicator = document.getElementById('typingIndicator');
+            indicator.style.display = 'none';
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            const sendButton = document.getElementById('sendButton');
+            
+            if (!message) return;
+            
+            addMessage(message, true);
+            input.value = '';
+            sendButton.disabled = true;
+            
+            showTypingIndicator();
+            
+            try {
+                let response;
+                
+                if (currentMode === 'api' && apiEndpoint) {
+                    // Claude API版
+                    response = await callClaudeAPI(message);
+                    hideTypingIndicator();
+                    addMessage(response, false, true);
+                } else {
+                    // スタンドアロン版
+                    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
+                    hideTypingIndicator();
+                    response = findBestResponse(message);
+                    addMessage(response, false);
+                }
+            } catch (error) {
+                hideTypingIndicator();
+                addMessage(`<div class="error-message">エラーが発生しました: ${error.message}</div>`, false);
+            } finally {
+                sendButton.disabled = false;
+            }
+        }
+
+        function sendQuickMessage(message) {
+            document.getElementById('messageInput').value = message;
+            sendMessage();
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+    </script>
+</body>
+</html>
