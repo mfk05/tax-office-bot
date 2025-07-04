@@ -164,15 +164,28 @@
         .bot-avatar {
             width: 36px;
             height: 36px;
-            background: linear-gradient(135deg, #1a365d 0%, #2c5282 100%);
             border-radius: 50%;
+            flex-shrink: 0;
+            overflow: hidden;
+            background: #f3f4f6;
             display: flex;
             align-items: center;
             justify-content: center;
+            font-size: 24px;
+            line-height: 1;
+        }
+
+        .bot-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .bot-avatar.text-avatar {
+            background: linear-gradient(135deg, #1a365d 0%, #2c5282 100%);
             color: white;
             font-weight: bold;
             font-size: 16px;
-            flex-shrink: 0;
         }
 
         .message-content {
@@ -519,7 +532,7 @@
 
         <div class="chat-container" id="chatContainer">
             <div class="message bot-message">
-                <div class="bot-avatar">AI</div>
+                <div class="bot-avatar" style="background: #f3f4f6; font-size: 24px;">🤖</div>
                 <div class="message-content">
                     <h3>こんにちは！税理士会支部のAIサポートです</h3>
                     Google Workspace導入に関するご質問をお気軽にどうぞ。<br><br>
@@ -677,6 +690,23 @@
         }
         updateStatus();
         
+        // 初期メッセージのアバターを更新（画像URLが設定されている場合）
+        if (AI_AVATAR_URL) {
+            const initialAvatar = document.querySelector('.chat-container .bot-avatar');
+            if (initialAvatar) {
+                const img = document.createElement('img');
+                img.src = AI_AVATAR_URL;
+                img.alt = 'AI Assistant';
+                img.onerror = function() {
+                    initialAvatar.innerHTML = AI_AVATAR_EMOJI;
+                    initialAvatar.style.background = '#f3f4f6';
+                    initialAvatar.style.fontSize = '24px';
+                };
+                initialAvatar.innerHTML = '';
+                initialAvatar.appendChild(img);
+            }
+        }
+        
         function updateStatus() {
             const statusDot = document.getElementById('statusDot');
             const statusText = document.getElementById('statusText');
@@ -770,6 +800,10 @@
             return data.response || data.content || 'エラー: 応答を取得できませんでした';
         }
 
+        // アバター画像のURL（空の場合は絵文字を使用）
+        const AI_AVATAR_URL = ''; // 画像URLまたは空文字
+        const AI_AVATAR_EMOJI = '🤖'; // 使用する絵文字
+
         function addMessage(content, isUser, isRaw = false) {
             const chatContainer = document.getElementById('chatContainer');
             const messageDiv = document.createElement('div');
@@ -778,7 +812,25 @@
             if (!isUser) {
                 const avatarDiv = document.createElement('div');
                 avatarDiv.className = 'bot-avatar';
-                avatarDiv.textContent = 'AI';
+                
+                if (AI_AVATAR_URL) {
+                    // 画像URLが設定されている場合
+                    const img = document.createElement('img');
+                    img.src = AI_AVATAR_URL;
+                    img.alt = 'AI Assistant';
+                    img.onerror = function() {
+                        avatarDiv.innerHTML = AI_AVATAR_EMOJI;
+                        avatarDiv.style.background = '#f3f4f6';
+                        avatarDiv.style.fontSize = '24px';
+                    };
+                    avatarDiv.appendChild(img);
+                } else {
+                    // 絵文字を使用
+                    avatarDiv.textContent = AI_AVATAR_EMOJI;
+                    avatarDiv.style.background = '#f3f4f6';
+                    avatarDiv.style.fontSize = '24px';
+                }
+                
                 messageDiv.appendChild(avatarDiv);
             }
             
@@ -896,10 +948,11 @@
                 await new Promise(resolve => setTimeout(resolve, 500));
                 const offlineResponse = findBestResponse(message);
                 
-                // オフライン版で適切な回答が見つからない場合
-                if (offlineResponse.includes('詳しい情報が見つかりませんでした') || 
-                    offlineResponse.includes('事務局までお問い合わせ')) {
-                    
+                // オフライン版で適切な回答が見つからない場合のみAPIを使用
+                const needsAI = offlineResponse.includes('その質問については詳しい情報が見つかりませんでした') && 
+                               offlineResponse.includes('担当者までお問い合わせ');
+                
+                if (needsAI) {
                     // APIが設定されていれば、Claude APIを使用
                     if (apiEndpoint) {
                         hideTypingIndicator();
