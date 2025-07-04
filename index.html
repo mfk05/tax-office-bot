@@ -579,6 +579,9 @@
         </div>
     </div>
 
+    <!-- Marked.js を CDN から読み込み -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
     <script>
         // グローバル変数
         const DEFAULT_API_ENDPOINT = ''; // GAS URLを設定
@@ -678,6 +681,14 @@
 
         // ページ読み込み時の処理
         document.addEventListener('DOMContentLoaded', function() {
+            // marked.js が読み込まれているか確認
+            if (typeof marked === 'undefined') {
+                console.error('marked.js が読み込まれていません');
+                // フォールバック処理を追加することも可能
+            } else {
+                console.log('marked.js version:', marked.version || 'unknown');
+            }
+            
             // 初期設定
             if (apiEndpoint) {
                 document.getElementById('apiEndpoint').value = apiEndpoint;
@@ -856,118 +867,40 @@
             indicator.style.display = 'none';
         }
 
+        // marked.js の設定
+        marked.setOptions({
+            breaks: true, // 改行を<br>に変換
+            gfm: true, // GitHub Flavored Markdown を有効化
+            sanitize: false, // HTMLを許可（XSS対策は別途実施）
+            smartLists: true, // リストの改善
+            smartypants: true // クォートなどを適切に変換
+        });
+
         function convertMarkdownToHTML(text) {
-            // HTMLタグをエスケープして安全に処理
-            let html = text;
-            
-            // 既存のHTMLタグをエスケープ（<>を文字実体参照に変換）
-            html = html.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            
-            // 見出し（###, ##, #）
-            html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-            html = html.replace(/^## (.+)$/gm, '<h3>$1</h3>');
-            html = html.replace(/^# (.+)$/gm, '<h3>$1</h3>');
-            
-            // 太字（**text**）
-            html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-            
-            // 斜体（*text*）- 太字の後に処理
-            html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-            
-            // インラインコード（`code`）
-            html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-            
-            // 箇条書きリスト（- item または * item）
-            const lines = html.split('\n');
-            let inList = false;
-            let listType = '';
-            let processedLines = [];
-            
-            for (let i = 0; i < lines.length; i++) {
-                const line = lines[i];
-                const trimmedLine = line.trim();
+            try {
+                // marked.js を使用してマークダウンを変換
+                let html = marked.parse(text);
                 
-                // 箇条書きリストの判定
-                if (trimmedLine.match(/^[-*] (.+)$/)) {
-                    const itemContent = trimmedLine.replace(/^[-*] (.+)$/, '$1');
-                    if (!inList) {
-                        processedLines.push('<ul>');
-                        inList = true;
-                        listType = 'ul';
+                // 追加の処理（必要に応じて）
+                // 例：特定のクラスを追加
+                html = html.replace(/<h1>/g, '<h3>').replace(/<\/h1>/g, '</h3>');
+                html = html.replace(/<h2>/g, '<h3>').replace(/<\/h2>/g, '</h3>');
+                
+                // highlight クラスの適用（**強調**されたテキスト用）
+                html = html.replace(/<strong>([^<]+)<\/strong>/g, function(match, p1) {
+                    // 特定のキーワードにハイライトを適用
+                    if (p1.includes('削除後25日以内') || p1.includes('38,400円')) {
+                        return `<span class="highlight">${p1}</span>`;
                     }
-                    processedLines.push(`<li>${itemContent}</li>`);
-                }
-                // 番号付きリストの判定
-                else if (trimmedLine.match(/^\d+\. (.+)$/)) {
-                    const itemContent = trimmedLine.replace(/^\d+\. (.+)$/, '$1');
-                    if (!inList || listType !== 'ol') {
-                        if (inList) {
-                            processedLines.push(`</${listType}>`);
-                        }
-                        processedLines.push('<ol>');
-                        inList = true;
-                        listType = 'ol';
-                    }
-                    processedLines.push(`<li>${itemContent}</li>`);
-                }
-                // リスト以外の行
-                else {
-                    if (inList) {
-                        processedLines.push(`</${listType}>`);
-                        inList = false;
-                        listType = '';
-                    }
-                    
-                    // 空行の処理
-                    if (trimmedLine === '') {
-                        processedLines.push('<br>');
-                    } else {
-                        processedLines.push(line);
-                    }
-                }
+                    return match;
+                });
+                
+                return html;
+            } catch (error) {
+                console.error('Markdown conversion error:', error);
+                // エラー時はテキストをエスケープして返す
+                return text.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             }
-            
-            // 最後にリストが開いている場合は閉じる
-            if (inList) {
-                processedLines.push(`</${listType}>`);
-            }
-            
-            html = processedLines.join('\n');
-            
-            // 段落の処理（見出しやリスト以外のテキスト）
-            html = html.split('\n').map((line, index, array) => {
-                const trimmed = line.trim();
-                
-                // 既にHTMLタグで囲まれている、または空行の場合はそのまま
-                if (trimmed.startsWith('<') || trimmed === '<br>' || trimmed === '') {
-                    return line;
-                }
-                
-                // 前後の行を確認
-                const prevLine = index > 0 ? array[index - 1].trim() : '';
-                const nextLine = index < array.length - 1 ? array[index + 1].trim() : '';
-                
-                // リストやブロック要素の直後でなければ段落として扱う
-                if (!prevLine.endsWith('>') && !nextLine.startsWith('<')) {
-                    return `<p>${line}</p>`;
-                }
-                
-                return line;
-            }).join('\n');
-            
-            // 連続する<br>を削減
-            html = html.replace(/(<br>\n){2,}/g, '<br>\n');
-            
-            // 不要な改行を削除
-            html = html.replace(/<\/li>\n<li>/g, '</li><li>');
-            html = html.replace(/<\/h3>\n<br>/g, '</h3>');
-            html = html.replace(/<\/ul>\n<br>/g, '</ul>');
-            html = html.replace(/<\/ol>\n<br>/g, '</ol>');
-            html = html.replace(/<br>\n<h3>/g, '<h3>');
-            html = html.replace(/<br>\n<ul>/g, '<ul>');
-            html = html.replace(/<br>\n<ol>/g, '<ol>');
-            
-            return html;
         }
 
         async function sendMessage() {
@@ -1060,8 +993,14 @@
                 '- リスト項目1\n- リスト項目2\n- リスト項目3',
                 '1. 番号付き1\n2. 番号付き2',
                 'これは`インラインコード`です',
-                '<li>これはHTMLタグです</li>'
+                '<li>これはHTMLタグです</li>',
+                '```javascript\nfunction test() {\n  console.log("Hello");\n}\n```'
             ];
+            
+            if (typeof marked === 'undefined') {
+                console.error('marked.js が読み込まれていません');
+                return;
+            }
             
             testCases.forEach((test, index) => {
                 console.log(`Test ${index + 1}:`);
