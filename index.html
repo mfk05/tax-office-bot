@@ -686,7 +686,16 @@
                 console.error('marked.js が読み込まれていません');
                 // フォールバック処理を追加することも可能
             } else {
-                console.log('marked.js version:', marked.version || 'unknown');
+                console.log('marked.js が正常に読み込まれました');
+                // marked.js の動作確認
+                try {
+                    const testResult = marked.parse('**test**');
+                    if (testResult.includes('<strong>')) {
+                        console.log('marked.js の動作確認: OK');
+                    }
+                } catch (e) {
+                    console.error('marked.js の動作確認中にエラー:', e);
+                }
             }
             
             // 初期設定
@@ -868,38 +877,63 @@
         }
 
         // marked.js の設定
-        marked.setOptions({
-            breaks: true, // 改行を<br>に変換
-            gfm: true, // GitHub Flavored Markdown を有効化
-            sanitize: false, // HTMLを許可（XSS対策は別途実施）
-            smartLists: true, // リストの改善
-            smartypants: true // クォートなどを適切に変換
-        });
+        if (typeof marked !== 'undefined') {
+            // marked.js v4.0以降とそれ以前の両方に対応
+            try {
+                marked.setOptions({
+                    breaks: true, // 改行を<br>に変換
+                    gfm: true, // GitHub Flavored Markdown を有効化
+                    headerIds: false, // ヘッダーにIDを付けない
+                    mangle: false, // メールアドレスを難読化しない
+                });
+            } catch (e) {
+                console.log('marked.js オプション設定時の警告:', e.message);
+                // 古いバージョンの場合やオプションが存在しない場合は無視
+            }
+        }
 
         function convertMarkdownToHTML(text) {
             try {
+                // marked.js が利用可能か確認
+                if (typeof marked === 'undefined' || typeof marked.parse !== 'function') {
+                    throw new Error('marked.js が利用できません');
+                }
+                
                 // marked.js を使用してマークダウンを変換
                 let html = marked.parse(text);
                 
-                // 追加の処理（必要に応じて）
-                // 例：特定のクラスを追加
+                // 追加の処理
+                // h1, h2タグをh3に統一（デザインの一貫性のため）
                 html = html.replace(/<h1>/g, '<h3>').replace(/<\/h1>/g, '</h3>');
                 html = html.replace(/<h2>/g, '<h3>').replace(/<\/h2>/g, '</h3>');
                 
-                // highlight クラスの適用（**強調**されたテキスト用）
-                html = html.replace(/<strong>([^<]+)<\/strong>/g, function(match, p1) {
-                    // 特定のキーワードにハイライトを適用
-                    if (p1.includes('削除後25日以内') || p1.includes('38,400円')) {
-                        return `<span class="highlight">${p1}</span>`;
-                    }
-                    return match;
+                // highlight クラスの適用（特定のキーワード用）
+                const highlightKeywords = [
+                    '削除後25日以内',
+                    '38,400円（税抜）',
+                    '退任される方の作業は特に必要ありません',
+                    '2025年秋以降'
+                ];
+                
+                highlightKeywords.forEach(keyword => {
+                    const regex = new RegExp(`(${keyword})`, 'g');
+                    html = html.replace(regex, '<span class="highlight">$1</span>');
                 });
+                
+                // コードブロックにクラスを追加
+                html = html.replace(/<pre><code>/g, '<pre class="code-block"><code>');
                 
                 return html;
             } catch (error) {
                 console.error('Markdown conversion error:', error);
-                // エラー時はテキストをエスケープして返す
-                return text.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+                // エラー時は基本的なエスケープ処理を行って返す
+                return text
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/\n/g, '<br>')
+                    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                    .replace(/`(.+?)`/g, '<code>$1</code>');
             }
         }
 
