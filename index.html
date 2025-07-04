@@ -580,15 +580,13 @@
     </div>
 
     <script>
-        // グローバル変数を最初に定義
-        const DEFAULT_API_ENDPOINT = ''; // 例: 'https://your-domain.com/api' または GAS URL
+        // グローバル変数
+        const DEFAULT_API_ENDPOINT = ''; // GAS URLを設定
         const AI_AVATAR_URL = ''; // 画像URLまたは空文字
         const AI_AVATAR_EMOJI = '🤖'; // 使用する絵文字
         
         let apiEndpoint = localStorage.getItem('apiEndpoint') || DEFAULT_API_ENDPOINT;
         
-        // システムプロンプトはGAS側で管理（詳細はGASのSYSTEM_PROMPTを参照）
-
         // ローカル知識ベース（オフライン版用）
         const knowledgeBase = {
             startDate: {
@@ -656,6 +654,25 @@
                 <li><strong>副支部長</strong>：事務局管理フォルダにアクセス可能</li>
                 </ul>
                 フォルダが見えない場合は、担当者までご連絡ください。`
+            },
+            departments: {
+                keywords: ['部署', '管理される部署', '組織', '部門'],
+                response: `<h3>管理される部署一覧</h3>
+                Google Workspaceで管理される11部署：
+                <ul>
+                <li>総務部</li>
+                <li>綱紀監察部</li>
+                <li>業務研究部</li>
+                <li>広報部</li>
+                <li>厚生部</li>
+                <li>税務支援対策部</li>
+                <li>税務相談部</li>
+                <li>租税教育部</li>
+                <li>経理部</li>
+                <li>成年後見支援センター</li>
+                <li>鎌倉支部創立40周年記念委員会</li>
+                </ul>
+                この他に「事務局管理」フォルダがあります。`
             }
         };
 
@@ -671,19 +688,29 @@
             if (AI_AVATAR_URL) {
                 const initialAvatar = document.querySelector('.chat-container .bot-avatar');
                 if (initialAvatar) {
-                    const img = document.createElement('img');
-                    img.src = AI_AVATAR_URL;
-                    img.alt = 'AI Assistant';
-                    img.onerror = function() {
-                        initialAvatar.innerHTML = AI_AVATAR_EMOJI;
-                        initialAvatar.style.background = '#f3f4f6';
-                        initialAvatar.style.fontSize = '24px';
-                    };
-                    initialAvatar.innerHTML = '';
-                    initialAvatar.appendChild(img);
+                    updateAvatar(initialAvatar);
                 }
             }
         });
+
+        function updateAvatar(avatarDiv) {
+            if (AI_AVATAR_URL) {
+                const img = document.createElement('img');
+                img.src = AI_AVATAR_URL;
+                img.alt = 'AI Assistant';
+                img.onerror = function() {
+                    avatarDiv.innerHTML = AI_AVATAR_EMOJI;
+                    avatarDiv.style.background = '#f3f4f6';
+                    avatarDiv.style.fontSize = '24px';
+                };
+                avatarDiv.innerHTML = '';
+                avatarDiv.appendChild(img);
+            } else {
+                avatarDiv.textContent = AI_AVATAR_EMOJI;
+                avatarDiv.style.background = '#f3f4f6';
+                avatarDiv.style.fontSize = '24px';
+            }
+        }
         
         function updateStatus() {
             const statusDot = document.getElementById('statusDot');
@@ -704,7 +731,7 @@
         }
 
         function saveConfig() {
-            apiEndpoint = document.getElementById('apiEndpoint').value;
+            apiEndpoint = document.getElementById('apiEndpoint').value.trim();
             localStorage.setItem('apiEndpoint', apiEndpoint);
             updateStatus();
             toggleConfig();
@@ -740,7 +767,7 @@
 
             return `<h3>お問い合わせありがとうございます</h3>
             申し訳ございません。その質問については詳しい情報が見つかりませんでした。<br><br>
-            担当までお問い合わせいただくか、以下のような質問をお試しください：
+            担当者までお問い合わせいただくか、以下のような質問をお試しください：
             <ul>
             <li>利用開始時期について</li>
             <li>費用について</li>
@@ -754,31 +781,41 @@
                 throw new Error('APIエンドポイントが設定されていません');
             }
 
-            // Google Apps Script用のリクエスト形式
-            const response = await fetch(apiEndpoint, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'text/plain', // GASはtext/plainが必要
-                },
-                body: JSON.stringify({
-                    messages: [
-                        {
-                            role: 'user',
-                            content: message
-                        }
-                    ]
-                })
-            });
+            try {
+                const response = await fetch(apiEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain',
+                    },
+                    body: JSON.stringify({
+                        messages: [
+                            {
+                                role: 'user',
+                                content: message
+                            }
+                        ]
+                    })
+                });
 
-            if (!response.ok) {
-                throw new Error('API呼び出しに失敗しました');
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('API Response:', errorText);
+                    throw new Error(`API呼び出しに失敗しました: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // レスポンスの形式を確認
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                return data.response || data.content || 'エラー: 応答を取得できませんでした';
+            } catch (error) {
+                console.error('API Call Error:', error);
+                throw error;
             }
-
-            const data = await response.json();
-            return data.response || data.content || 'エラー: 応答を取得できませんでした';
         }
-
-        // 以下の定義を削除（既に上部で定義済み）
 
         function addMessage(content, isUser, isRaw = false) {
             const chatContainer = document.getElementById('chatContainer');
@@ -788,25 +825,7 @@
             if (!isUser) {
                 const avatarDiv = document.createElement('div');
                 avatarDiv.className = 'bot-avatar';
-                
-                if (AI_AVATAR_URL) {
-                    // 画像URLが設定されている場合
-                    const img = document.createElement('img');
-                    img.src = AI_AVATAR_URL;
-                    img.alt = 'AI Assistant';
-                    img.onerror = function() {
-                        avatarDiv.innerHTML = AI_AVATAR_EMOJI;
-                        avatarDiv.style.background = '#f3f4f6';
-                        avatarDiv.style.fontSize = '24px';
-                    };
-                    avatarDiv.appendChild(img);
-                } else {
-                    // 絵文字を使用
-                    avatarDiv.textContent = AI_AVATAR_EMOJI;
-                    avatarDiv.style.background = '#f3f4f6';
-                    avatarDiv.style.fontSize = '24px';
-                }
-                
+                updateAvatar(avatarDiv);
                 messageDiv.appendChild(avatarDiv);
             }
             
@@ -838,10 +857,9 @@
         }
 
         function convertMarkdownToHTML(text) {
-            // 基本的なマークダウンをHTMLに変換
             let html = text;
             
-            // 見出し（先に処理）
+            // 見出し
             html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
             html = html.replace(/^## (.+)$/gm, '<h3>$1</h3>');
             html = html.replace(/^# (.+)$/gm, '<h3>$1</h3>');
@@ -850,7 +868,7 @@
             html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
             html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
             
-            // インラインコード（バッククォート）
+            // インラインコード
             html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
             
             // リスト項目を一時的にマーク
@@ -858,7 +876,7 @@
             html = html.replace(/^\* (.+)$/gm, '|||UL|||$1|||ENDUL|||');
             html = html.replace(/^\d+\. (.+)$/gm, '|||OL|||$1|||ENDOL|||');
             
-            // 改行処理（リストマーカーを避ける）
+            // 改行処理
             html = html.split('\n').map(line => {
                 if (line.includes('|||UL|||') || line.includes('|||OL|||') || 
                     line.includes('<h3>') || line.includes('</h3>')) {
@@ -867,7 +885,7 @@
                 return line + '<br>';
             }).join('\n');
             
-            // 連続するリスト項目をグループ化
+            // リストをグループ化
             html = html.replace(/((?:|||UL|||.*?|||ENDUL|||(?:\n|<br>))+)/g, function(match) {
                 const items = match.replace(/|||UL|||/g, '<li>')
                                   .replace(/|||ENDUL|||/g, '</li>')
@@ -887,21 +905,15 @@
             if (!html.startsWith('<h3>') && !html.startsWith('<ul>') && !html.startsWith('<ol>')) {
                 html = '<p>' + html;
             }
-            if (!html.endsWith('</h3>') && !html.endsWith('</ul>') && !html.endswith('</ol>')) {
+            if (!html.endsWith('</h3>') && !html.endsWith('</ul>') && !html.endsWith('</ol>')) {
                 html = html + '</p>';
             }
             
             // 不要な空のタグを削除
             html = html.replace(/<p><\/p>/g, '');
-            html = html.replace(/<p><h3>/g, '<h3>');
-            html = html.replace(/<\/h3><\/p>/g, '</h3>');
-            html = html.replace(/<p><ul>/g, '<ul>');
-            html = html.replace(/<\/ul><\/p>/g, '</ul>');
-            html = html.replace(/<p><ol>/g, '<ol>');
-            html = html.replace(/<\/ol><\/p>/g, '</ol>');
-            html = html.replace(/<br><ul>/g, '<ul>');
-            html = html.replace(/<br><ol>/g, '<ol>');
-            html = html.replace(/<br><h3>/g, '<h3>');
+            html = html.replace(/<p>(<h3>|<ul>|<ol>)/g, '$1');
+            html = html.replace(/(<\/h3>|<\/ul>|<\/ol>)<\/p>/g, '$1');
+            html = html.replace(/<br>(<ul>|<ol>|<h3>)/g, '$1');
             
             return html;
         }
@@ -925,39 +937,34 @@
                 const offlineResponse = findBestResponse(message);
                 
                 // オフライン版で適切な回答が見つからない場合のみAPIを使用
-                const needsAI = offlineResponse.includes('その質問については詳しい情報が見つかりませんでした') && 
-                               offlineResponse.includes('担当者までお問い合わせ');
+                const needsAI = offlineResponse.includes('その質問については詳しい情報が見つかりませんでした');
                 
-                if (needsAI) {
-                    // APIが設定されていれば、Claude APIを使用
-                    if (apiEndpoint) {
+                if (needsAI && apiEndpoint) {
+                    // AI検索中のメッセージを追加
+                    hideTypingIndicator();
+                    addMessage('<div class="info-message">📚 詳しい情報を検索中です...</div>', false);
+                    showTypingIndicator();
+                    
+                    try {
+                        const aiResponse = await callClaudeAPI(message);
                         hideTypingIndicator();
-                        
-                        // AI検索中のメッセージを表示
-                        addMessage('<div class="info-message">📚 詳しい情報を検索中です...</div>', false);
-                        showTypingIndicator();
-                        
-                        try {
-                            const aiResponse = await callClaudeAPI(message);
-                            hideTypingIndicator();
-                            // マークダウンをHTMLに変換して表示
-                            const formattedResponse = convertMarkdownToHTML(aiResponse);
-                            addMessage(formattedResponse, false, false);
-                        } catch (apiError) {
-                            hideTypingIndicator();
-                            addMessage(`<div class="error-message">AIによる回答の取得に失敗しました。</div>${offlineResponse}`, false);
-                        }
-                    } else {
-                        // API未設定の場合はオフライン版の回答を表示
+                        const formattedResponse = convertMarkdownToHTML(aiResponse);
+                        addMessage(formattedResponse, false);
+                    } catch (apiError) {
+                        console.error('API Error:', apiError);
                         hideTypingIndicator();
-                        addMessage(offlineResponse + '<br><br><div class="info-message">💡 より詳しい回答が必要な場合は、⚙️設定からAI機能を有効にしてください。</div>', false);
+                        addMessage(`<div class="error-message">AIによる回答の取得に失敗しました: ${apiError.message}</div>${offlineResponse}`, false);
                     }
                 } else {
-                    // オフライン版で十分な回答が見つかった場合
                     hideTypingIndicator();
-                    addMessage(offlineResponse, false);
+                    if (needsAI && !apiEndpoint) {
+                        addMessage(offlineResponse + '<br><br><div class="info-message">💡 より詳しい回答が必要な場合は、⚙️設定からAI機能を有効にしてください。</div>', false);
+                    } else {
+                        addMessage(offlineResponse, false);
+                    }
                 }
             } catch (error) {
+                console.error('Send Message Error:', error);
                 hideTypingIndicator();
                 addMessage(`<div class="error-message">エラーが発生しました: ${error.message}</div>`, false);
             } finally {
@@ -967,10 +974,6 @@
 
         function sendQuickMessage(message) {
             const input = document.getElementById('messageInput');
-            if (!input) {
-                console.error('メッセージ入力欄が見つかりません');
-                return;
-            }
             input.value = message;
             sendMessage();
         }
@@ -981,13 +984,21 @@
             }
         }
 
-        // グローバルスコープに関数を公開（onclickイベント用）
-        window.sendQuickMessage = sendQuickMessage;
-        window.handleKeyPress = handleKeyPress;
-        window.sendMessage = sendMessage;
-        window.toggleConfig = toggleConfig;
-        window.saveConfig = saveConfig;
-        window.updateStatus = updateStatus;
+        // デバッグ関数
+        async function testAPI() {
+            if (!apiEndpoint) {
+                console.log('APIエンドポイントが設定されていません');
+                return;
+            }
+            
+            try {
+                const response = await fetch(apiEndpoint);
+                const data = await response.json();
+                console.log('API Test Result:', data);
+            } catch (error) {
+                console.error('API Test Error:', error);
+            }
+        }
     </script>
 </body>
 </html>
